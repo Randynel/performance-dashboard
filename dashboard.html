@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Performance Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0a;
+  --s1:#111111;
+  --s2:#161616;
+  --s3:#1d1d1d;
+  --bdr:rgba(255,255,255,0.07);
+  --bdr2:rgba(255,255,255,0.04);
+  --t1:#f0f0f0;
+  --t2:#888;
+  --t3:#444;
+  --blue:#4F8EF7;
+  --blue2:#7AAFF9;
+  --blue3:rgba(79,142,247,0.15);
+  --teal:#22C98A;
+  --teal3:rgba(34,201,138,0.12);
+  --amber:#F5A623;
+  --amber3:rgba(245,166,35,0.12);
+  --green:#6EC540;
+  --green3:rgba(110,197,64,0.1);
+  --red:#F05252;
+  --purple:#A78BFA;
+  --r4:4px;--r8:8px;--r12:12px;--r16:16px;
+}
+body{background:var(--bg);color:var(--t1);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;min-height:100vh;padding:2.5rem 2rem}
+.wrap{max-width:1180px;margin:0 auto}
+
+/* Header */
+.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2.25rem}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--blue);box-shadow:0 0 12px var(--blue)}
+h1{font-size:21px;font-weight:500;letter-spacing:-.3px}
+.tagline{font-size:12px;color:var(--t3);letter-spacing:.02em}
+.header-right{display:flex;align-items:center;gap:10px}
+.update-badge{background:var(--s2);border:1px solid var(--bdr);border-radius:20px;padding:4px 12px;font-size:11px;color:var(--t3)}
+
+/* Buttons */
+button{background:var(--s2);border:1px solid var(--bdr);color:var(--t2);padding:8px 16px;border-radius:var(--r8);font-size:12px;cursor:pointer;transition:all .15s;font-family:inherit}
+button:hover{background:var(--s3);color:var(--t1);border-color:rgba(255,255,255,0.15)}
+button:disabled{opacity:.4;cursor:not-allowed}
+.btn-primary{background:rgba(79,142,247,0.15);border-color:rgba(79,142,247,0.4);color:var(--blue)}
+.btn-primary:hover{background:rgba(79,142,247,0.25);border-color:var(--blue);color:var(--blue)}
+
+/* Tabs */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--bdr);margin-bottom:2rem;padding-bottom:0}
+.tab{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;color:var(--t3);padding:10px 18px;font-size:13px;margin-bottom:-1px;transition:all .15s}
+.tab.on{color:var(--t1);border-bottom-color:var(--blue)}
+.tab:hover{background:none;color:var(--t2)}
+.panel{display:none}.panel.on{display:block}
+
+/* Metric cards */
+.mets{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.5rem}
+.met{background:var(--s1);border:1px solid var(--bdr);border-radius:var(--r12);padding:1.1rem 1.25rem;position:relative;overflow:hidden}
+.met::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:var(--r12) var(--r12) 0 0}
+.met.blue::before{background:linear-gradient(90deg,var(--blue),transparent)}
+.met.teal::before{background:linear-gradient(90deg,var(--teal),transparent)}
+.met.amber::before{background:linear-gradient(90deg,var(--amber),transparent)}
+.met.grn::before{background:linear-gradient(90deg,var(--green),transparent)}
+.ml{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.09em;margin-bottom:7px}
+.mv{font-size:21px;font-weight:500;letter-spacing:-.3px;line-height:1}
+.ms{font-size:11px;color:var(--t3);margin-top:5px}
+
+/* Cards */
+.card{background:var(--s1);border:1px solid var(--bdr);border-radius:var(--r16);padding:1.5rem;margin-bottom:1.25rem}
+.ct{font-size:14px;font-weight:500;letter-spacing:-.2px}
+.cs{font-size:11px;color:var(--t3);margin-top:3px;margin-bottom:1.25rem}
+.leg{display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap}
+.li{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--t3)}
+.canvas-wrap{position:relative}
+
+/* Grid */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem}
+
+/* Annual summary cards */
+.acards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.5rem}
+.acard{background:var(--s1);border:1px solid var(--bdr);border-radius:var(--r12);padding:1.1rem 1.25rem}
+.al{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.09em;margin-bottom:8px}
+.av{font-size:23px;font-weight:500;letter-spacing:-.4px}
+.as{font-size:11px;color:var(--t3);margin-top:4px}
+
+/* YoY table section */
+.yoy-section{margin-bottom:1.25rem}
+.yoy-label{font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.75rem;display:flex;align-items:center;gap:8px}
+.yoy-label::after{content:'';flex:1;height:1px;background:var(--bdr)}
+.yoy-grid{display:grid;gap:8px}
+.yoy-row{display:grid;grid-template-columns:100px repeat(var(--cols,3),1fr);gap:6px;align-items:center}
+.yoy-hdr{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;padding:0 10px}
+.yoy-cell{background:var(--s2);border:1px solid var(--bdr2);border-radius:var(--r8);padding:10px;text-align:center}
+.yoy-period{font-size:12px;color:var(--t2);padding:0 4px}
+.yoy-val{font-size:15px;font-weight:500;line-height:1}
+.yoy-sub{font-size:10px;color:var(--t3);margin-top:3px}
+.yoy-delta{font-size:10px;margin-top:2px}
+.pos{color:var(--teal)!important}.neg{color:var(--red)!important}.neu{color:var(--t3)!important}
+.tag-met{font-size:9px;background:rgba(34,201,138,.12);color:var(--teal);border:1px solid rgba(34,201,138,.25);border-radius:4px;padding:1px 5px;margin-top:4px;display:inline-block}
+.tag-miss{font-size:9px;background:rgba(240,82,82,.1);color:var(--red);border:1px solid rgba(240,82,82,.2);border-radius:4px;padding:1px 5px;margin-top:4px;display:inline-block}
+.na-cell{background:var(--s2);border:1px dashed var(--bdr2);border-radius:var(--r8);padding:10px;text-align:center;font-size:11px;color:var(--t3)}
+
+/* Table */
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--t3);font-weight:500;padding:8px 10px;text-align:right;border-bottom:1px solid var(--bdr)}
+th:first-child{text-align:left}
+td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--bdr2);color:var(--t2)}
+td:first-child{text-align:left;color:var(--t1);font-weight:500}
+tr:last-child td{border-bottom:none}
+
+/* Upload */
+.upanel{display:none;margin-bottom:1.5rem}.upanel.open{display:block}
+.fgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.25rem}
+.fl{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--t3);margin-bottom:6px}
+input[type=file]{font-size:11px;color:var(--t2);width:100%;background:var(--s2);border:1px solid var(--bdr);border-radius:var(--r8);padding:6px 8px;cursor:pointer}
+.fn{font-size:10px;color:var(--teal);margin-top:4px;min-height:14px}
+.info-box{background:rgba(79,142,247,0.06);border:1px solid rgba(79,142,247,0.18);border-radius:var(--r8);padding:.875rem 1rem;margin-bottom:1.25rem;font-size:12px;color:var(--t2);line-height:1.6}
+.info-box strong{color:var(--blue)}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--s3);border-radius:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- Header -->
+<div class="header">
+  <div>
+    <div class="logo">
+      <span class="logo-dot"></span>
+      <h1>Performance Dashboard</h1>
+    </div>
+    <div class="tagline">Stocks · Forex · Options · Net Worth &nbsp;·&nbsp; Upload quarterly to keep it live</div>
+  </div>
+  <div class="header-right">
+    <span class="update-badge" id="lastUpdate">Data from your files</span>
+    <button class="btn-primary" id="togUp">↑ Upload data</button>
+  </div>
+</div>
+
+<!-- Upload Panel -->
+<div id="upWrap" class="upanel">
+  <div class="card">
+    <div class="ct">Upload your tracker files</div>
+    <div class="cs">Claude reads your multi-sheet Excel format and extracts figures automatically. Upload tracker files every quarter and the Wealth Tracker every 6 months.</div>
+    <div class="info-box">
+      <strong>Stocks / Forex / Options</strong> — upload every 3 months (your quarterly tracker Excel)<br>
+      <strong>Wealth Tracker</strong> — upload every 6 months (your HY &amp; FY Excel)
+    </div>
+    <div class="fgrid" id="fInputs"></div>
+    <div style="display:flex;align-items:center;gap:14px">
+      <button class="btn-primary" id="parseBtn">Parse &amp; update charts</button>
+      <span id="pMsg" style="font-size:12px;color:var(--teal)"></span>
+    </div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab on" data-t="q">Quarterly performance</button>
+  <button class="tab" data-t="y">Year on year</button>
+</div>
+
+<!-- =================== QUARTERLY PANEL =================== -->
+<div id="pq" class="panel on">
+
+  <div class="mets">
+    <div class="met blue">
+      <div class="ml">Stocks all-time</div>
+      <div class="mv" style="color:var(--blue)" id="m-stocks-r">+22.2%</div>
+      <div class="ms" id="m-stocks-p">£1,822 net P&amp;L · 9 quarters</div>
+    </div>
+    <div class="met teal">
+      <div class="ml">Forex (from Q1 '26)</div>
+      <div class="mv" style="color:var(--teal)" id="m-forex-r">+1.8%</div>
+      <div class="ms" id="m-forex-p">£0.01 — just started</div>
+    </div>
+    <div class="met amber">
+      <div class="ml">Options (from Q1 '26)</div>
+      <div class="mv" style="color:var(--amber)" id="m-options-r">−8.0%</div>
+      <div class="ms" id="m-options-p">−£10 — just started</div>
+    </div>
+    <div class="met grn">
+      <div class="ml">Net Worth (FY 2025)</div>
+      <div class="mv" style="color:var(--green)" id="m-nw">£17,500</div>
+      <div class="ms" id="m-nw-s">+499% since 2023 HY</div>
+    </div>
+  </div>
+
+  <!-- Chart 1: % Returns -->
+  <div class="card">
+    <div class="ct">Percentage return — quarterly</div>
+    <div class="cs">Stocks Q1 2024 onwards · Forex &amp; Options from Q1 2026 · dashed = target</div>
+    <div class="leg">
+      <div class="li"><svg width="22" height="3"><line x1="0" y1="1.5" x2="22" y2="1.5" stroke="#4F8EF7" stroke-width="2"/></svg>Stocks</div>
+      <div class="li"><svg width="22" height="3"><line x1="0" y1="1.5" x2="22" y2="1.5" stroke="#22C98A" stroke-width="2" stroke-dasharray="5,3"/></svg>Forex</div>
+      <div class="li"><svg width="22" height="3"><line x1="0" y1="1.5" x2="22" y2="1.5" stroke="#F5A623" stroke-width="2" stroke-dasharray="2,3"/></svg>Options</div>
+      <div class="li"><svg width="22" height="3"><line x1="0" y1="1.5" x2="22" y2="1.5" stroke="rgba(255,255,255,0.2)" stroke-width="1.5" stroke-dasharray="4,3"/></svg>Target</div>
+    </div>
+    <div class="canvas-wrap" style="height:270px"><canvas id="c1"></canvas></div>
+  </div>
+
+  <!-- Chart 2: P&L -->
+  <div class="card">
+    <div class="ct">Profit &amp; loss — quarterly (£)</div>
+    <div class="cs">Absolute GBP amounts per quarter</div>
+    <div class="leg">
+      <div class="li"><span style="width:10px;height:10px;background:var(--blue);border-radius:3px;display:inline-block"></span>Stocks</div>
+      <div class="li"><span style="width:10px;height:10px;background:var(--teal);border-radius:3px;display:inline-block"></span>Forex</div>
+      <div class="li"><span style="width:10px;height:10px;background:var(--amber);border-radius:3px;display:inline-block"></span>Options</div>
+    </div>
+    <div class="canvas-wrap" style="height:270px"><canvas id="c2"></canvas></div>
+  </div>
+
+  <!-- Chart 3: Net Worth HY/FY -->
+  <div class="card">
+    <div class="ct">Net worth — every 6 months</div>
+    <div class="cs">HY = mid-year snapshot · FY = full-year snapshot · updated every 6 months when you upload</div>
+    <div class="leg">
+      <div class="li"><span style="width:10px;height:10px;background:var(--green);border-radius:50%;display:inline-block"></span>HY (half-year)</div>
+      <div class="li"><span style="width:10px;height:10px;border:2px solid var(--green);border-radius:50%;display:inline-block;box-sizing:border-box"></span>FY (full-year)</div>
+    </div>
+    <div class="canvas-wrap" style="height:250px"><canvas id="c3"></canvas></div>
+  </div>
+
+</div><!-- /pq -->
+
+<!-- =================== YOY PANEL =================== -->
+<div id="py" class="panel">
+
+  <!-- Annual summary cards -->
+  <div class="acards" id="acards">
+    <div class="acard">
+      <div class="al">Stocks 2024</div>
+      <div class="av" style="color:var(--blue)">+22%</div>
+      <div class="as">£1,500 · Q2 best (+30%) · target hit</div>
+    </div>
+    <div class="acard">
+      <div class="al">Stocks 2025</div>
+      <div class="av" style="color:var(--blue)">+16%</div>
+      <div class="as">£1,268 · Q1 best (+15%) · target hit</div>
+    </div>
+    <div class="acard">
+      <div class="al">Net worth '23 → '25</div>
+      <div class="av" style="color:var(--green)">+499%</div>
+      <div class="as">£1,800 → £17,500 in 2 years</div>
+    </div>
+  </div>
+
+  <!-- YoY chart: stocks -->
+  <div class="card">
+    <div class="ct">Stocks — quarterly return by year</div>
+    <div class="cs">Each cluster = one year · bars per quarter · amber line = full-year total · 2026 partial</div>
+    <div class="canvas-wrap" style="height:270px"><canvas id="c4"></canvas></div>
+  </div>
+
+  <!-- Side-by-side: annual P&L + net worth -->
+  <div class="g2">
+    <div class="card" style="margin-bottom:0">
+      <div class="ct">Annual stocks P&amp;L</div>
+      <div class="cs">Total GBP per year</div>
+      <div class="canvas-wrap" style="height:215px"><canvas id="c5"></canvas></div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="ct">Net worth — year-end (FY)</div>
+      <div class="cs">Hover for YoY growth %</div>
+      <div class="canvas-wrap" style="height:215px"><canvas id="c6"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ===== YOY BREAKDOWN SECTION ===== -->
+  <div class="card" style="margin-top:1.25rem">
+    <div class="ct">Year-over-year breakdown</div>
+    <div class="cs">Exact % change quarter-over-quarter for each tracker · HY &amp; FY for net worth</div>
+
+    <!-- Stocks YoY -->
+    <div class="yoy-section" style="margin-top:1rem">
+      <div class="yoy-label">Stocks — quarterly YoY</div>
+      <div id="yoy-stocks"></div>
+    </div>
+
+    <!-- Forex YoY -->
+    <div class="yoy-section">
+      <div class="yoy-label">Forex — quarterly YoY</div>
+      <div id="yoy-forex"></div>
+    </div>
+
+    <!-- Options YoY -->
+    <div class="yoy-section">
+      <div class="yoy-label">Options — quarterly YoY</div>
+      <div id="yoy-options"></div>
+    </div>
+
+    <!-- Net Worth YoY -->
+    <div class="yoy-section">
+      <div class="yoy-label">Net worth — HY &amp; FY YoY</div>
+      <div id="yoy-nw"></div>
+    </div>
+  </div>
+
+  <!-- Detail table -->
+  <div class="card" style="margin-top:1.25rem">
+    <div class="ct">All quarters — full detail</div>
+    <div class="cs">Every recorded period with return, P&amp;L, and target status</div>
+    <table>
+      <thead><tr>
+        <th style="text-align:left">Period</th>
+        <th style="text-align:left">Tracker</th>
+        <th>Return</th><th>Target</th><th>P&amp;L</th><th>vs Target</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+</div><!-- /py -->
+</div><!-- /wrap -->
+
+<script>
+// =====================================================
+// YOUR DATA — updated by upload/parse below
+// =====================================================
+let DATA = {
+  stocks: [
+    {p:"Q1 '24", y:2024, q:1, r:-20,  profit:-700,  target:4},
+    {p:"Q2 '24", y:2024, q:2, r:30,   profit:1100,  target:4},
+    {p:"Q3 '24", y:2024, q:3, r:6,    profit:400,   target:4},
+    {p:"Q4 '24", y:2024, q:4, r:6,    profit:700,   target:4},
+    {p:"Q1 '25", y:2025, q:1, r:15,   profit:900,   target:4},
+    {p:"Q2 '25", y:2025, q:2, r:3,    profit:332,   target:4},
+    {p:"Q3 '25", y:2025, q:3, r:3,    profit:336,   target:4},
+    {p:"Q4 '25", y:2025, q:4, r:-5,   profit:-300,  target:4},
+    {p:"Q1 '26", y:2026, q:1, r:-7.8, profit:-708,  target:4},
+  ],
+  forex: [
+    {p:"Q1 '26", y:2026, q:1, r:1.8, profit:0.01, target:9},
+  ],
+  options: [
+    {p:"Q1 '26", y:2026, q:1, r:-8.0, profit:-10.01, target:10},
+  ],
+  networth: [
+    {p:"2023 HY", y:2023, half:"HY", v:1800},
+    {p:"2023 FY", y:2023, half:"FY", v:2920},
+    {p:"2024 HY", y:2024, half:"HY", v:4950},
+    {p:"2024 FY", y:2024, half:"FY", v:6500},
+    {p:"2025 HY", y:2025, half:"HY", v:15800},
+    {p:"2025 FY", y:2025, half:"FY", v:17500},
+  ]
+};
+
+// Load from localStorage if saved
+['stocks','forex','options','networth'].forEach(k=>{
+  try{ const s=localStorage.getItem('fd_'+k); if(s) DATA[k]=JSON.parse(s); }catch(e){}
+});
+
+// =====================================================
+// CHART HELPERS
+// =====================================================
+const BL='#4F8EF7', TL='#22C98A', AM='#F5A623', GR='#6EC540', RD='#F05252', PU='#A78BFA';
+const TK={color:'#3a3a3a',font:{size:11}};
+const GD={color:'rgba(255,255,255,0.04)'};
+const TP={backgroundColor:'#141414',borderColor:'rgba(255,255,255,0.1)',borderWidth:1,titleColor:'#666',bodyColor:'#bbb',padding:12,cornerRadius:10,displayColors:false};
+
+const CH={};
+function dc(id){if(CH[id]){CH[id].destroy();delete CH[id];}}
+
+function pct(v){return v!=null?(v>0?'+':'')+v.toFixed(1)+'%':'—';}
+function gbp(v){if(v==null)return'—';const abs=Math.abs(v);const s=abs>=1000?(abs/1000).toFixed(1)+'k':abs.toFixed(v===Math.floor(v)?0:2);return(v>=0?'£':'-£')+s;}
+function yoyDelta(curr,prev){if(curr==null||prev==null)return null;if(prev===0)return null;return((curr-prev)/Math.abs(prev)*100);}
+
+// =====================================================
+// RENDER METRICS
+// =====================================================
+function renderMetrics(){
+  const sr=DATA.stocks.reduce((a,d)=>a+d.r,0);
+  const sp=DATA.stocks.reduce((a,d)=>a+d.profit,0);
+  const fr=DATA.forex.reduce((a,d)=>a+d.r,0);
+  const fp=DATA.forex.reduce((a,d)=>a+d.profit,0);
+  const or=DATA.options.reduce((a,d)=>a+d.r,0);
+  const op=DATA.options.reduce((a,d)=>a+d.profit,0);
+  const nwLast=DATA.networth[DATA.networth.length-1]?.v||0;
+  const nwFirst=DATA.networth[0]?.v||1;
+  const nwG=((nwLast-nwFirst)/nwFirst*100).toFixed(0);
+
+  document.getElementById('m-stocks-r').textContent=pct(sr);
+  document.getElementById('m-stocks-p').textContent=gbp(sp)+' net P&L · '+DATA.stocks.length+' quarters';
+  document.getElementById('m-forex-r').textContent=pct(fr);
+  document.getElementById('m-forex-p').textContent=DATA.forex.length===1?'£0.01 — just started':gbp(fp)+' net P&L';
+  document.getElementById('m-options-r').textContent=pct(or);
+  document.getElementById('m-options-p').textContent=DATA.options.length===1?'-£10 — just started':gbp(op)+' net P&L';
+  document.getElementById('m-nw').textContent='£'+nwLast.toLocaleString();
+  const firstPeriod=DATA.networth[0]?.p||'start';
+  document.getElementById('m-nw-s').textContent='+'+nwG+'% since '+firstPeriod;
+}
+
+// =====================================================
+// RENDER YOY TABLES
+// =====================================================
+function renderYoY(){
+  renderYoYTracker('yoy-stocks', DATA.stocks, 'stocks');
+  renderYoYTracker('yoy-forex',  DATA.forex,  'forex');
+  renderYoYTracker('yoy-options',DATA.options,'options');
+  renderYoYNW('yoy-nw');
+}
+
+function renderYoYTracker(elId, data, type){
+  const el=document.getElementById(elId);
+  if(!data||data.length===0){el.innerHTML='<div style="font-size:12px;color:var(--t3);padding:8px">No data yet — upload your '+type+' tracker to see YoY comparisons.</div>';return;}
+
+  // Group by quarter
+  const qs=[1,2,3,4];
+  const years=[...new Set(data.map(d=>d.y))].sort();
+  const cols=years.length;
+
+  let html=`<div style="overflow-x:auto">
+  <div style="min-width:${100+cols*130}px">
+  <div style="display:grid;grid-template-columns:100px repeat(${cols},1fr);gap:6px;margin-bottom:6px">
+    <div></div>
+    ${years.map(y=>`<div class="yoy-hdr" style="text-align:center">${y}</div>`).join('')}
+  </div>`;
+
+  qs.forEach(q=>{
+    const rowData=years.map(y=>data.find(d=>d.y===y&&d.q===q)||null);
+    const hasAny=rowData.some(d=>d!==null);
+    if(!hasAny)return;
+
+    html+=`<div style="display:grid;grid-template-columns:100px repeat(${cols},1fr);gap:6px;margin-bottom:6px;align-items:stretch">
+      <div class="yoy-period">Q${q}</div>`;
+    rowData.forEach((d,i)=>{
+      if(d===null){html+=`<div class="na-cell">—</div>`;return;}
+      const prev=rowData[i-1];
+      // YoY calculated on GBP profit (matches Excel: (curr-prev)/|prev|)
+      const delta=prev?yoyDelta(d.profit,prev.profit):null;
+      const beat=d.r>=d.target;
+      html+=`<div class="yoy-cell">
+        <div class="yoy-val ${d.r>=0?'pos':'neg'}">${pct(d.r)}</div>
+        <div class="yoy-sub">${gbp(d.profit)}</div>
+        ${delta!=null?`<div class="yoy-delta ${delta>=0?'pos':'neg'}">${delta>0?'↑':'↓'}${Math.abs(delta).toFixed(1)}% YoY</div>`:''}
+        <span class="${beat?'tag-met':'tag-miss'}">${beat?'✓ target':'✗ below'}</span>
+      </div>`;
+    });
+    html+=`</div>`;
+  });
+
+  html+=`</div></div>`;
+  el.innerHTML=html;
+}
+
+function renderYoYNW(elId){
+  const el=document.getElementById(elId);
+  const data=DATA.networth;
+  if(!data||data.length===0){el.innerHTML='<div style="font-size:12px;color:var(--t3);padding:8px">No data yet.</div>';return;}
+
+  const years=[...new Set(data.map(d=>d.y))].sort();
+  const periods=['HY','FY'];
+  const cols=years.length;
+
+  let html=`<div style="overflow-x:auto">
+  <div style="min-width:${100+cols*130}px">
+  <div style="display:grid;grid-template-columns:100px repeat(${cols},1fr);gap:6px;margin-bottom:6px">
+    <div></div>
+    ${years.map(y=>`<div class="yoy-hdr" style="text-align:center">${y}</div>`).join('')}
+  </div>`;
+
+  periods.forEach(half=>{
+    const rowData=years.map(y=>data.find(d=>d.y===y&&d.half===half)||null);
+    html+=`<div style="display:grid;grid-template-columns:100px repeat(${cols},1fr);gap:6px;margin-bottom:6px;align-items:stretch">
+      <div class="yoy-period">${half}</div>`;
+    rowData.forEach((d,i)=>{
+      if(d===null){html+=`<div class="na-cell">—</div>`;return;}
+      const prev=rowData[i-1];
+      const delta=prev?yoyDelta(d.v,prev.v):null;
+      html+=`<div class="yoy-cell">
+        <div class="yoy-val" style="color:var(--green)">£${d.v.toLocaleString()}</div>
+        ${delta!=null?`<div class="yoy-delta ${delta>=0?'pos':'neg'}">${delta>=0?'↑':'↓'}${Math.abs(delta).toFixed(1)}% YoY</div>`:'<div class="yoy-delta neu">baseline</div>'}
+      </div>`;
+    });
+    html+=`</div>`;
+  });
+
+  html+=`</div></div>`;
+  el.innerHTML=html;
+}
+
+// =====================================================
+// RENDER TABLE
+// =====================================================
+function renderTable(){
+  const TC={stocks:BL,forex:TL,options:AM};
+  const all=[
+    ...DATA.stocks.map(d=>({...d,type:'stocks'})),
+    ...DATA.forex.map(d=>({...d,type:'forex'})),
+    ...DATA.options.map(d=>({...d,type:'options'})),
+  ].sort((a,b)=>a.y-b.y||(a.q-b.q));
+  document.getElementById('tbody').innerHTML=all.map(({p,type,r,target,profit})=>{
+    const beat=r>=target;
+    return`<tr>
+      <td>${p}</td>
+      <td style="color:${TC[type]};font-weight:500;text-transform:capitalize">${type}</td>
+      <td class="${r>=0?'pos':'neg'}">${pct(r)}</td>
+      <td style="color:var(--t3)">${target}%</td>
+      <td class="${profit>=0?'pos':'neg'}">${gbp(profit)}</td>
+      <td style="font-size:11px;color:${beat?TL:RD}">${beat?'✓ Target met':'✗ Below target'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// =====================================================
+// INIT ALL CHARTS
+// =====================================================
+function initCharts(){
+  dc('c1');dc('c2');dc('c3');dc('c4');dc('c5');dc('c6');
+
+  // All quarters aligned
+  const allP=[...new Set([...DATA.stocks,...DATA.forex,...DATA.options].map(d=>d.p))].sort((a,b)=>{
+    const parse=s=>{const m=s.match(/Q(\d) '(\d+)/);return m?parseInt(m[2])*10+parseInt(m[1]):0;};
+    return parse(a)-parse(b);
+  });
+
+  const getR=(src,p)=>src.find(d=>d.p===p)?.r??null;
+  const getProfit=(src,p)=>src.find(d=>d.p===p)?.profit??null;
+  const getTgt=(src,p)=>src.find(d=>d.p===p)?.target??null;
+
+  const sR=allP.map(p=>getR(DATA.stocks,p));
+  const fR=allP.map(p=>getR(DATA.forex,p));
+  const oR=allP.map(p=>getR(DATA.options,p));
+  const sP=allP.map(p=>getProfit(DATA.stocks,p));
+  const fP=allP.map(p=>getProfit(DATA.forex,p));
+  const oP=allP.map(p=>getProfit(DATA.options,p));
+  const sTgt=allP.map(p=>getTgt(DATA.stocks,p));
+
+  // --- C1: % returns line ---
+  CH.c1=new Chart(document.getElementById('c1'),{type:'line',data:{
+    labels:allP,
+    datasets:[
+      {label:'Stocks',  data:sR, borderColor:BL, backgroundColor:BL+'18', pointBackgroundColor:BL, pointBorderColor:'#0a0a0a', pointBorderWidth:1.5, borderWidth:2.5, pointRadius:4, spanGaps:false, tension:.35, fill:false},
+      {label:'Forex',   data:fR, borderColor:TL, pointBackgroundColor:TL, pointBorderColor:'#0a0a0a', pointBorderWidth:1.5, borderWidth:2, pointRadius:6, spanGaps:false, tension:.35, borderDash:[6,4]},
+      {label:'Options', data:oR, borderColor:AM, pointBackgroundColor:AM, pointBorderColor:'#0a0a0a', pointBorderWidth:1.5, borderWidth:2, pointRadius:6, spanGaps:false, tension:.35, borderDash:[2,4]},
+      {label:'Target',  data:sTgt, borderColor:'rgba(255,255,255,0.18)', pointRadius:0, borderWidth:1, spanGaps:true, tension:0, borderDash:[4,3]},
+    ]
+  },options:{
+    responsive:true,maintainAspectRatio:false,
+    interaction:{mode:'index',intersect:false},
+    plugins:{legend:{display:false},tooltip:{...TP,callbacks:{
+      label:c=>c.parsed.y!=null?`${c.dataset.label}: ${pct(c.parsed.y)}`:`${c.dataset.label}: —`
+    }}},
+    scales:{
+      x:{grid:GD,ticks:{...TK,maxRotation:45,autoSkip:false},border:{color:'transparent'}},
+      y:{grid:GD,ticks:{...TK,callback:v=>`${v}%`},border:{color:'transparent'},
+        afterDataLimits:s=>{s.max=Math.max(s.max,6);s.min=Math.min(s.min,-26);}}
+    }
+  }});
+
+  // --- C2: P&L bars ---
+  CH.c2=new Chart(document.getElementById('c2'),{type:'bar',data:{
+    labels:allP,
+    datasets:[
+      {label:'Stocks',  data:sP, backgroundColor:sP.map(v=>v!=null?(v>=0?BL+'CC':RD+'AA'):null), borderRadius:3, borderSkipped:false},
+      {label:'Forex',   data:fP, backgroundColor:fP.map(v=>v!=null?(v>=0?TL+'CC':RD+'AA'):null), borderRadius:3, borderSkipped:false},
+      {label:'Options', data:oP, backgroundColor:oP.map(v=>v!=null?(v>=0?AM+'CC':RD+'AA'):null), borderRadius:3, borderSkipped:false},
+    ]
+  },options:{
+    responsive:true,maintainAspectRatio:false,
+    interaction:{mode:'index',intersect:false},
+    plugins:{legend:{display:false},tooltip:{...TP,callbacks:{
+      label:c=>c.parsed.y!=null?`${c.dataset.label}: ${gbp(c.parsed.y)}`:`${c.dataset.label}: —`
+    }}},
+    scales:{
+      x:{grid:{...GD,drawOnChartArea:false},ticks:{...TK,maxRotation:45,autoSkip:false},border:{color:'transparent'}},
+      y:{grid:GD,ticks:{...TK,callback:v=>gbp(v)},border:{color:'transparent'},
+        afterDataLimits:s=>{s.max=Math.max(s.max,200);s.min=Math.min(s.min,-200);}}
+    }
+  }});
+
+  // --- C3: Net worth HY/FY ---
+  const nwL=DATA.networth.map(d=>d.p);
+  const nwV=DATA.networth.map(d=>d.v);
+  const nwHY=DATA.networth.map(d=>d.half==='HY'?d.v:null);
+  const nwFY=DATA.networth.map(d=>d.half==='FY'?d.v:null);
+
+  CH.c3=new Chart(document.getElementById('c3'),{type:'line',data:{
+    labels:nwL,
+    datasets:[
+      {label:'Line', data:nwV, borderColor:GR, backgroundColor:GR+'12', borderWidth:2, fill:true, tension:.4, pointRadius:0, spanGaps:true},
+      {label:'HY',   data:nwHY, borderColor:'transparent', backgroundColor:GR, pointRadius:7, pointHoverRadius:9, showLine:false},
+      {label:'FY',   data:nwFY, borderColor:GR, backgroundColor:'#0a0a0a', pointRadius:5, pointHoverRadius:7, showLine:false, pointBorderWidth:2.5},
+    ]
+  },options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{...TP,callbacks:{
+      title:([c])=>c.label,
+      label:c=>{if(c.datasetIndex===0)return null;return`${c.dataset.label}: £${c.parsed.y.toLocaleString()}`;}
+    }}},
+    scales:{
+      x:{grid:GD,ticks:TK,border:{color:'transparent'}},
+      y:{grid:GD,ticks:{...TK,callback:v=>`£${(v/1000).toFixed(0)}k`},border:{color:'transparent'}}
+    }
+  }});
+
+  // --- C4: Stocks by year ---
+  const sy=[...new Set(DATA.stocks.map(d=>d.y))].sort();
+  const ann=sy.map(y=>({
+    y,
+    qs:[1,2,3,4].map(q=>DATA.stocks.find(d=>d.y===y&&d.q===q)?.r??null),
+    fy:DATA.stocks.filter(d=>d.y===y).reduce((a,d)=>a+d.r,0)
+  }));
+
+  const q1c=BL+'F0',q2c=BL+'AA',q3c=BL+'66',q4c=BL+'33';
+  CH.c4=new Chart(document.getElementById('c4'),{type:'bar',data:{
+    labels:sy.map(y=>y+(y===Math.max(...sy)&&DATA.stocks.filter(d=>d.y===y).length<4?'*':'')),
+    datasets:[
+      {label:'Q1',data:ann.map(a=>a.qs[0]),backgroundColor:q1c,borderRadius:3,borderSkipped:false},
+      {label:'Q2',data:ann.map(a=>a.qs[1]),backgroundColor:q2c,borderRadius:3,borderSkipped:false},
+      {label:'Q3',data:ann.map(a=>a.qs[2]),backgroundColor:q3c,borderRadius:3,borderSkipped:false},
+      {label:'Q4',data:ann.map(a=>a.qs[3]),backgroundColor:q4c,borderRadius:3,borderSkipped:false},
+      {label:'Full year',data:ann.map(a=>a.fy),type:'line',borderColor:AM,backgroundColor:'transparent',borderWidth:2.5,pointRadius:6,pointBackgroundColor:AM,pointBorderColor:'#0a0a0a',pointBorderWidth:1.5,tension:.2},
+    ]
+  },options:{
+    responsive:true,maintainAspectRatio:false,
+    interaction:{mode:'index',intersect:false},
+    plugins:{legend:{display:true,labels:{color:'#555',font:{size:11},boxWidth:12,padding:14}},tooltip:{...TP,callbacks:{
+      label:c=>c.parsed.y!=null?`${c.dataset.label}: ${pct(c.parsed.y)}`:`${c.dataset.label}: —`
+    }}},
+    scales:{
+      x:{grid:{...GD,drawOnChartArea:false},ticks:TK,border:{color:'transparent'}},
+      y:{grid:GD,ticks:{...TK,callback:v=>`${v}%`},border:{color:'transparent'},
+        afterDataLimits:s=>{s.max=Math.max(s.max,5);s.min=Math.min(s.min,-25);}}
+    }
+  }});
+
+  // --- C5: Annual P&L ---
+  const annPL=sy.map(y=>DATA.stocks.filter(d=>d.y===y).reduce((a,d)=>a+d.profit,0));
+  CH.c5=new Chart(document.getElementById('c5'),{type:'bar',data:{
+    labels:sy,
+    datasets:[{label:'P&L',data:annPL,backgroundColor:annPL.map(v=>v>=0?BL+'CC':RD+'CC'),borderRadius:6,borderSkipped:false}]
+  },options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{...TP,callbacks:{label:c=>`${gbp(c.parsed.y)}`}}},
+    scales:{
+      x:{grid:{...GD,drawOnChartArea:false},ticks:TK,border:{color:'transparent'}},
+      y:{grid:GD,ticks:{...TK,callback:v=>gbp(v)},border:{color:'transparent'},
+        afterDataLimits:s=>{s.max=Math.max(s.max,200);s.min=Math.min(s.min,-200);}}
+    }
+  }});
+
+  // --- C6: NW year-end (FY values) ---
+  const fyData=DATA.networth.filter(d=>d.half==='FY');
+  const fyG=fyData.map((d,i)=>i===0?null:((d.v-fyData[i-1].v)/fyData[i-1].v*100).toFixed(1));
+  CH.c6=new Chart(document.getElementById('c6'),{type:'bar',data:{
+    labels:fyData.map(d=>d.y),
+    datasets:[{
+      label:'Net worth FY',
+      data:fyData.map(d=>d.v),
+      backgroundColor:fyData.map((_,i)=>`rgba(110,197,64,${0.4+i*0.25})`),
+      borderRadius:6,borderSkipped:false
+    }]
+  },options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{...TP,callbacks:{
+      label:c=>`£${c.parsed.y.toLocaleString()}`,
+      afterLabel:c=>{const g=fyG[c.dataIndex];return g?`YoY: +${g}%`:'Baseline';}
+    }}},
+    scales:{
+      x:{grid:{...GD,drawOnChartArea:false},ticks:TK,border:{color:'transparent'}},
+      y:{grid:GD,ticks:{...TK,callback:v=>`£${(v/1000).toFixed(0)}k`},border:{color:'transparent'}}
+    }
+  }});
+}
+
+// =====================================================
+// TABS
+// =====================================================
+document.querySelectorAll('.tab').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+    document.querySelectorAll('.panel').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    document.getElementById('p'+b.dataset.t).classList.add('on');
+    setTimeout(()=>Object.values(CH).forEach(c=>c.resize()),60);
+  });
+});
+
+// =====================================================
+// UPLOAD + CLAUDE AI PARSING
+// =====================================================
+document.getElementById('togUp').addEventListener('click',()=>{
+  const p=document.getElementById('upWrap');
+  p.classList.toggle('open');
+  document.getElementById('togUp').textContent=p.classList.contains('open')?'↓ Hide upload':'↑ Upload data';
+});
+
+const SF={forex:null,stocks:null,options:null,networth:null};
+const FNM={
+  forex:'Forex tracker (.xlsx)',
+  stocks:'Stock tracker (.xlsx)',
+  options:'Options tracker (.xlsx)',
+  networth:'Wealth tracker (.xlsx)'
+};
+
+const fEl=document.getElementById('fInputs');
+Object.keys(FNM).forEach(t=>{
+  fEl.innerHTML+=`
+    <div>
+      <div class="fl">${FNM[t]}</div>
+      <input type="file" id="fi_${t}" accept=".xlsx,.xls,.csv"/>
+      <div id="fn_${t}" class="fn"></div>
+    </div>`;
+});
+Object.keys(FNM).forEach(t=>{
+  document.getElementById('fi_'+t).addEventListener('change',e=>{
+    SF[t]=e.target.files[0]||null;
+    document.getElementById('fn_'+t).textContent=SF[t]?.name||'';
+  });
+});
+
+document.getElementById('parseBtn').addEventListener('click',async()=>{
+  const entries=Object.entries(SF).filter(([,f])=>f);
+  const msg=document.getElementById('pMsg');
+  if(!entries.length){msg.textContent='Upload at least one file first.';msg.style.color='var(--red)';return;}
+  document.getElementById('parseBtn').disabled=true;
+  msg.style.color='var(--teal)';
+
+  for(const[type,file]of entries){
+    msg.textContent=`Parsing ${type}…`;
+    try{
+      const txt=await new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.readAsText(file);});
+      const isNw=type==='networth';
+
+      const prompt=isNw
+        ?`This is a Wealth Tracker Excel. Extract the Net Worth (£) row which has values for HY and FY per year.
+Return ONLY a JSON array like:
+[{"p":"2023 HY","y":2023,"half":"HY","v":1800},{"p":"2023 FY","y":2023,"half":"FY","v":2920},...]
+Include only rows with actual non-zero values. No markdown, no explanation.`
+        :type==='stocks'
+        ?`This is a Stock Performance Tracker Excel with years as column groups (2024, 2025, 2026...) and Q1-Q4 sub-columns.
+Extract: Achieved Return row (decimal — multiply ×100 for %) and GBP Earned row per quarter.
+Only include quarters with actual non-zero data. Target return per quarter is 4% (0.04).
+Return ONLY JSON array like:
+[{"p":"Q1 '24","y":2024,"q":1,"r":-20,"profit":-700,"target":4},...]
+No markdown, no explanation.`
+        :type==='forex'
+        ?`This is a Forex Performance Tracker Excel. Extract Achieved Return (×100 for %) and GBP Earned per quarter. Target is 9% per quarter.
+Return ONLY JSON: [{"p":"Q1 '26","y":2026,"q":1,"r":1.8,"profit":0.01,"target":9},...]. No markdown.`
+        :`This is an Options Performance Tracker Excel. Extract Achieved Return (×100 for %) and GBP Equivalent (£) per quarter. Target is 10% per quarter.
+Return ONLY JSON: [{"p":"Q1 '26","y":2026,"q":1,"r":-8.0,"profit":-10.01,"target":10},...]. No markdown.`;
+
+      const res=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,
+          messages:[{role:'user',content:`${prompt}\n\nSpreadsheet data:\n${txt.slice(0,9000)}`}]})
+      });
+      const data=await res.json();
+      const raw=data.content?.[0]?.text||'';
+      const parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
+      DATA[type]=parsed;
+      localStorage.setItem('fd_'+type,JSON.stringify(parsed));
+      msg.textContent=`✓ ${type} updated`;
+    }catch(e){
+      msg.style.color='var(--red)';
+      msg.textContent=`Error on ${type}: ${e.message}`;
+    }
+  }
+
+  document.getElementById('parseBtn').disabled=false;
+  msg.style.color='var(--teal)';
+  msg.textContent='Done — charts updated!';
+  renderAll();
+  document.getElementById('lastUpdate').textContent='Updated just now';
+  setTimeout(()=>msg.textContent='',5000);
+});
+
+// =====================================================
+// RENDER ALL
+// =====================================================
+function renderAll(){
+  renderMetrics();
+  initCharts();
+  renderYoY();
+  renderTable();
+}
+
+renderAll();
+</script>
+</body>
+</html>
