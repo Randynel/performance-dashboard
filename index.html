@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Performance Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -500,63 +501,116 @@ document.getElementById('togUp').addEventListener('click',()=>{
   });
 });
 
+// ── EXCEL PARSING (runs fully in the browser with SheetJS — no API calls) ──
+const readBuf=f=>new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=()=>rej(new Error('Could not read the file'));r.readAsArrayBuffer(f);});
+const toNum=v=>{if(v===null||v===undefined||v==='')return null;const n=typeof v==='number'?v:parseFloat(String(v).replace(/[£,%\s]/g,''));return isNaN(n)?null:n;};
+const sheetRows=(wb,key)=>{
+  const name=wb.SheetNames.find(s=>s.toLowerCase().includes(key));
+  if(!name)throw new Error('No "'+key+'" tab found (tabs: '+wb.SheetNames.join(', ')+')');
+  return {name,rows:XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:null})};
+};
+const findRow=(rows,re,from=0)=>{
+  for(let i=from;i<rows.length;i++){
+    const r=rows[i]||[];
+    for(let c=0;c<Math.min(3,r.length);c++){if(typeof r[c]==='string'&&re.test(r[c]))return i;}
+  }
+  return -1;
+};
+function parseQuarterSheet(wb,key,gbpRes,defTarget){
+  const {name,rows}=sheetRows(wb,key);
+  // quarter header row = first row with 4+ cells like Q1..Q4
+  let qi=-1;
+  for(let i=0;i<Math.min(rows.length,15);i++){
+    if((rows[i]||[]).filter(v=>typeof v==='string'&&/^\s*Q[1-4]\b/i.test(v)).length>=4){qi=i;break;}
+  }
+  if(qi<0)throw new Error('Could not find the Q1–Q4 header row on "'+name+'"');
+  // year row = nearest row above with year-like cells, forward-filled across merged cells
+  let yi=-1;
+  for(let i=qi-1;i>=0;i--){if((rows[i]||[]).some(v=>/^(20\d\d)/.test(String(v==null?'':v).trim()))){yi=i;break;}}
+  if(yi<0)throw new Error('Could not find the year row on "'+name+'"');
+  const years=[];let cur=null;
+  (rows[yi]||[]).forEach((v,c)=>{const m=String(v==null?'':v).match(/(20\d\d)/);if(m)cur=+m[1];years[c]=cur;});
+  const tRow=findRow(rows,/target/i,qi+1);
+  const aRow=findRow(rows,/achieved/i,qi+1);
+  let gRow=-1;
+  for(const re of gbpRes){gRow=findRow(rows,re,qi+1);if(gRow>=0)break;}
+  if(aRow<0)throw new Error('Could not find the "Achieved Return" row on "'+name+'"');
+  if(gRow<0)gRow=aRow+1;
+  const out=[];
+  (rows[qi]||[]).forEach((v,c)=>{
+    const m=typeof v==='string'&&v.match(/^\s*Q([1-4])\b/i);
+    if(!m||!years[c])return;
+    const ach=toNum((rows[aRow]||[])[c]);
+    if(ach===null||ach===0)return;
+    const tg=tRow>=0?toNum((rows[tRow]||[])[c]):null;
+    const gbp=toNum((rows[gRow]||[])[c]);
+    const y=years[c],q=+m[1];
+    out.push({p:'Q'+q+" '"+String(y).slice(2),y,q,r:Math.round(ach*10000)/100,profit:gbp===null?0:Math.round(gbp*100)/100,target:tg===null?defTarget:Math.round(tg*10000)/100});
+  });
+  out.sort((a,b)=>a.y-b.y||a.q-b.q);
+  return out;
+}
+function parseWealth(wb){
+  // use the first tab that contains a "Net Worth" row
+  for(const name of wb.SheetNames){
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:null});
+    const ni=findRow(rows,/net\s*worth/i);
+    if(ni<0)continue;
+    // forward-fill years along each header row above the net worth row
+    const ff=rows.slice(0,ni).map(r=>{let cur=null;return (r||[]).map(v=>{const m=String(v==null?'':v).match(/(20\d\d)/);if(m)cur=+m[1];return cur;});});
+    const out=[];
+    (rows[ni]||[]).forEach((v,c)=>{
+      const val=toNum(v);
+      if(val===null||val<=0)return;
+      let half=null,year=null;
+      for(let i=ni-1;i>=0;i--){
+        const cell=String((rows[i]||[])[c]==null?'':rows[i][c]);
+        if(!half){const h=cell.match(/\b(HY|FY)\b/i);if(h)half=h[1].toUpperCase();}
+        if(!year){const y=cell.match(/(20\d\d)/);if(y)year=+y[1];}
+      }
+      if(!year){for(let i=ni-1;i>=0&&!year;i--)year=ff[i][c]||null;}
+      if(!half||!year)return;
+      out.push({p:year+' '+half,y:year,half,v:Math.round(val*100)/100});
+    });
+    if(out.length){out.sort((a,b)=>a.y-b.y||(a.half==='HY'?-1:1)-(b.half==='HY'?-1:1));return out;}
+    throw new Error('Found the Net Worth row on "'+name+'" but no HY/FY columns with values');
+  }
+  throw new Error('Could not find a "Net Worth (£)" row in any tab');
+}
+
 document.getElementById('parseBtn').addEventListener('click',async()=>{
   const msg=document.getElementById('pMsg');
   const tf=window._trackerFile,wf=window._wealthFile;
   if(!tf&&!wf){msg.textContent='Upload at least one file.';msg.style.color='var(--red)';return;}
   document.getElementById('parseBtn').disabled=true;
 
-  const readText=f=>new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.readAsText(f);});
-
   if(tf){
     msg.style.color='var(--teal)';msg.textContent='Parsing tracker file…';
     try{
-      const txt=await readText(tf);
-      const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:`This Excel file has 3 sheets:
-- "Stock Performance Tracker": years start from 2024, target 4% per quarter
-- "Forex Performance Tracker": years start from 2026, target 9% per quarter
-- "Options Performance Tracker": years start from 2026, target 10% per quarter
-
-Each sheet: Row 1 = year headers, Row 2 = Q1/Q2/Q3/Q4/Full Year, Row 3 = Target Return (decimal), Row 4 = Achieved Return (decimal ×100 = %), Row 5 = GBP Earned (Options: use Row 6 GBP Equivalent instead).
-
-Include ONLY quarters where Achieved Return is non-null and non-zero.
-Format period labels as "Q1 '24", "Q2 '25" etc.
-
-Return ONLY this JSON (no markdown, no explanation):
-{"stocks":[{"p":"Q1 '24","y":2024,"q":1,"r":-20,"profit":-700,"target":4},...],
- "forex": [{"p":"Q1 '26","y":2026,"q":1,"r":1.8,"profit":0.01,"target":9},...],
- "options":[{"p":"Q1 '26","y":2026,"q":1,"r":-8,"profit":-10.01,"target":10},...]}
-
-Data:\n${txt.slice(0,14000)}`}]})});
-      const d=await res.json();
-      const parsed=JSON.parse((d.content?.[0]?.text||'').replace(/```json|```/g,'').trim());
-      if(parsed.stocks){DATA.stocks=parsed.stocks;localStorage.setItem('fd_stocks',JSON.stringify(parsed.stocks));}
-      if(parsed.forex) {DATA.forex=parsed.forex;  localStorage.setItem('fd_forex', JSON.stringify(parsed.forex));}
-      if(parsed.options){DATA.options=parsed.options;localStorage.setItem('fd_options',JSON.stringify(parsed.options));}
-      msg.textContent='✓ Tracker file parsed';
+      if(typeof XLSX==='undefined')throw new Error('Excel reader failed to load — check your connection and refresh');
+      const wb=XLSX.read(await readBuf(tf),{type:'array'});
+      const stocks=parseQuarterSheet(wb,'stock',[/gbp earned|earned/i],4);
+      const forex=parseQuarterSheet(wb,'forex',[/gbp earned|earned/i],9);
+      const options=parseQuarterSheet(wb,'option',[/gbp equiv/i,/earned/i],10);
+      DATA.stocks=stocks;localStorage.setItem('fd_stocks',JSON.stringify(stocks));
+      DATA.forex=forex;localStorage.setItem('fd_forex',JSON.stringify(forex));
+      DATA.options=options;localStorage.setItem('fd_options',JSON.stringify(options));
+      msg.textContent='✓ Tracker parsed — '+stocks.length+' stock, '+forex.length+' forex, '+options.length+' options quarters';
     }catch(e){msg.style.color='var(--red)';msg.textContent='Tracker error: '+e.message;document.getElementById('parseBtn').disabled=false;return;}
   }
 
   if(wf){
     msg.style.color='var(--teal)';msg.textContent='Parsing wealth tracker…';
     try{
-      const txt=await readText(wf);
-      const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:`This is a Wealth Tracker Excel. Find the "Net Worth (£)" row. It has columns for each year split into HY and FY.
-Include ONLY periods where the value is greater than zero.
-Format period as "2023 HY", "2023 FY" etc.
-Return ONLY this JSON array (no markdown):
-[{"p":"2023 HY","y":2023,"half":"HY","v":1800},{"p":"2023 FY","y":2023,"half":"FY","v":2920},...]
-
-Data:\n${txt.slice(0,8000)}`}]})});
-      const d=await res.json();
-      const parsed=JSON.parse((d.content?.[0]?.text||'').replace(/```json|```/g,'').trim());
-      DATA.networth=parsed;
-      localStorage.setItem('fd_networth',JSON.stringify(parsed));
-      msg.textContent='✓ Wealth tracker parsed';
+      if(typeof XLSX==='undefined')throw new Error('Excel reader failed to load — check your connection and refresh');
+      const wb=XLSX.read(await readBuf(wf),{type:'array'});
+      const nw=parseWealth(wb);
+      DATA.networth=nw;
+      localStorage.setItem('fd_networth',JSON.stringify(nw));
+      msg.textContent='✓ Wealth tracker parsed — '+nw.length+' periods';
     }catch(e){msg.style.color='var(--red)';msg.textContent='Wealth error: '+e.message;document.getElementById('parseBtn').disabled=false;return;}
   }
+
 
   document.getElementById('parseBtn').disabled=false;
   msg.style.color='var(--teal)';
